@@ -1,0 +1,10 @@
+marcelmaatkamp/spring-boot-actuators
+
+
+"tkgregory/sample-metrics-application:latest"
+
+
+
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
