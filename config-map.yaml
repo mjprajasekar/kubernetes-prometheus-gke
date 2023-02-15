@@ -8,7 +8,7 @@ metadata:
 data:
   prometheus.rules: |-
     groups:
-    - name: devopscube demo alert
+    - name: gke-cloud
       rules:
       - alert: High Pod Memory
         expr: sum(container_memory_usage_bytes) > 1
@@ -17,6 +17,31 @@ data:
           severity: slack
         annotations:
           summary: High Memory Usage
+      - alert: PodRestarts
+        annotations:
+          message: Pod {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container}}) is restarting {{ printf "%.2f" $value }} times during the last hour. 
+        expr: increase(kube_pod_container_status_restarts_total{container!~"kubernetes-vault-renew"}[1h]) > 5
+        for: 5m
+        labels:
+          severity: slack
+      - alert: KubernetesPodNotHealthy
+        expr: min_over_time(sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"})[15m:1m]) > 0
+        for: 0m
+        labels:
+          severity: slack
+        annotations:
+          summary: Kubernetes Pod not healthy (instance {{ $labels.instance }})
+          description: "Pod has been in a non-ready state for longer than 15 minutes.\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"        
+        # This rule can be very noisy in dynamic infra with legitimate container start/stop/deployment.
+      - alert: ContainerAbsent
+        expr: absent(container_last_seen)
+        for: 5m
+        labels:
+          severity: slack
+        annotations:
+          summary: Container absent (instance {{ $labels.instance }})
+          description: "A container is absent for 5 min\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
   prometheus.yml: |-
     global:
       scrape_interval: 5s
@@ -28,7 +53,7 @@ data:
       - scheme: http
         static_configs:
         - targets:
-          - "alertmanager.monitoring.svc:9093"
+          - "10.152.0.88:9093"
 
     scrape_configs:
       - job_name: 'node-exporter'
@@ -67,7 +92,18 @@ data:
         metrics_path: '/actuator/loggers'
         scrape_interval: 5s
         static_configs:
-          - targets: ['10.152.0.55:8080']          
+          - targets: ['10.152.0.55:8080']
+
+      - job_name: 'kube state metrics'
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+        scheme: http
+        static_configs:
+          - targets: ['10.152.0.58:8080']
+        metric_relabel_configs:
+          - target_label: cluster
+            replacement: sydney_cluster1   
+
 
       - job_name: 'kubernetes-apiservers'
 
